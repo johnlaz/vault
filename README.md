@@ -22,8 +22,10 @@ it launches full-screen like a native app and keeps working offline.
 
 ## Tech
 
-Single HTML file. Tailwind (CDN), Dexie.js over IndexedDB for storage, Web
-Crypto for export encryption. No build step, no backend, no tracking.
+Single HTML app file. Tailwind (precompiled to `app/tailwind.css`), Dexie.js over
+IndexedDB for storage, Web Crypto for export encryption. Everything needed to
+start is bundled and precached, so it launches offline. The optional Excel import
+loads its library on demand and needs a connection. No backend, no tracking.
 
 ## Privacy
 
@@ -39,8 +41,10 @@ browser profile, so treat device access accordingly.
 |---|---|
 | `index.html` | Landing page |
 | `app/index.html` | The entire app |
+| `app/tailwind.css` | Precompiled Tailwind styles |
+| `app/dexie.min.js` | Dexie (IndexedDB), self-hosted |
+| `app/dm-sans.woff2` / `app/playfair.woff2` | Self-hosted fonts |
 | `app/manifest.json` | PWA install metadata |
 | `app/service-worker.js` | Offline caching |
-| `app/icon-192.png` / `app/icon-512.png` | App icons |
-| `app/icon-512-maskable.png` | Android adaptive icon |
+| `app/icon-192.png` / `app/icon-512.png` | App icons (512 is maskable-safe) |
 | `app/apple-touch-icon.png` | iOS home screen icon |
