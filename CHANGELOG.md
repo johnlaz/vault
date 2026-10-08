@@ -12,7 +12,8 @@ Copy these files over the repo, then DELETE the files listed under "Remove".
 | app/manifest.json | Added id, start_url "./", merged icons (192 any, 512 any maskable) | Stable install identity, one fewer icon file |
 | app/icon-512.png | Now the full-bleed (maskable-safe) artwork | Replaces icon-512-maskable.png |
 | index.html (landing) | Footer: © 2026 LAZLAB Creations. All Rights Reserved. + lazlab.io@gmail.com | Standard footer |
-| README.md | Tech and Files sections match the new layout; offline claim corrected | Accuracy |
+| README.md | Rewritten with the standard sections (live URLs, repo layout, data & privacy, AI/model setup, deploy/update, changelog) and the two images below | Matches reality |
+| docs/banner.svg, docs/how-it-works.svg (new) | README banner and data-flow diagram, self-contained, readable on GitHub light and dark | README visuals |
 
 ## Remove
 app/.keep, app/download, app/README.md, app/icon-512-maskable.png, icon-512.png (root), apple-touch-icon.png (root)
@@ -21,7 +22,8 @@ app/.keep, app/download, app/README.md, app/icon-512-maskable.png, icon-512.png 
 - Existing installs: the new worker (vault-v3) replaces vault-cache-v2 on next online launch and deletes the old cache. No reinstall needed; user data (IndexedDB) is untouched. Reinstall is only needed to pick up the new icon artwork on the home screen.
 - Keep APP_VERSION (app/index.html) and CACHE_VERSION (app/service-worker.js) equal when you bump versions.
 - Excel import still loads SheetJS from a CDN on demand (online only).
-- Not changed (awaiting approval): items 10-14 (landing polish, design, README rewrite and SVGs, a11y, PBKDF2 iterations). Screenshots not wired in because none were supplied.
+- README live URLs assume the repo is `johnlaz/vault` (https://johnlaz.github.io/vault/). Edit if the repo name differs.
+- Not changed (awaiting approval): items 10, 11, 13, 14 (landing polish, design, PBKDF2 iterations, a11y). Screenshots not wired in because none were supplied.
 
 ## Verification (headless Chromium simulation)
 - Cold offline reload with all servers stopped and HTTP cache disabled: app shell, Tailwind CSS, Dexie, both fonts load from the service worker; Dexie DB opens; no page errors.
