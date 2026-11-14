@@ -44,6 +44,30 @@
   .gold-grad{ background:linear-gradient(135deg,#ffa27a,#e0592a); }
   .fade-in{ animation:fadeIn .18s ease-out; }
   @keyframes fadeIn{ from{opacity:0; transform:translateY(4px)} to{opacity:1; transform:translateY(0)} }
+  /* Bulk-action bar */
+  .bk-bar{ position:fixed; left:50%; bottom:16px; transform:translateX(-50%); z-index:45; width:max-content; max-width:calc(100vw - 24px); display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:8px; padding:10px 12px; border-radius:14px; box-shadow:0 10px 30px rgba(0,0,0,.3); }
+  .bk-bar.hidden{ display:none; }
+  body.bk-on #toast{ bottom:92px; }
+  body.bk-on main{ padding-bottom:120px; }
+  .bk-btn{ font-size:13px; font-weight:600; padding:6px 12px; border-radius:8px; border:1px solid var(--card-line-solid); background:rgb(var(--c-navy-700)); color:rgb(var(--c-slate-200)); cursor:pointer; }
+  .bk-btn:hover:not(:disabled){ background:rgb(var(--c-navy-600)); }
+  .bk-btn:disabled{ opacity:.4; cursor:default; }
+  .bk-btn.danger{ background:rgb(var(--c-rose-900) / .45); border-color:rgb(var(--c-rose-700) / .5); color:rgb(var(--c-rose-300)); }
+  .bk-btn.primary{ background:linear-gradient(135deg,#ffa27a,#e0592a); border-color:transparent; color:#1b1326; }
+  /* Quick Edit table */
+  .qt-wrap{ overflow-x:auto; border-radius:12px; }
+  .qt{ width:100%; min-width:900px; border-collapse:separate; border-spacing:0; font-size:13px; }
+  .qt th{ text-align:left; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.03em; color:rgb(var(--c-slate-500)); padding:10px 6px; border-bottom:1px solid var(--card-line); white-space:nowrap; }
+  .qt td{ padding:3px 3px; border-bottom:1px solid var(--card-line); vertical-align:top; }
+  .qt td.qa{ white-space:nowrap; padding:8px 6px; font-size:12px; }
+  .qt .qi{ display:block; width:100%; min-width:100px; padding:6px 8px; border-radius:6px; border:1px solid transparent; background:transparent; color:rgb(var(--c-slate-100)); font:inherit; line-height:1.3; resize:none; overflow:hidden; }
+  .qt .qi:hover{ border-color:var(--card-line-solid); }
+  .qt .qi:focus{ outline:none; border-color:rgb(var(--c-gold-500)); background:rgb(var(--c-navy-800)); }
+  .qt .qi.mono{ font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12px; }
+  .qt textarea.qi:focus{ overflow:auto; min-height:64px; }
+  .qt tr.sel td{ background:rgb(var(--c-gold-500) / .1); }
+  .qt .qi.flash{ animation:qflash 1s ease-out; }
+  @keyframes qflash{ 0%{ background:rgb(var(--c-teal-500) / .45); } 100%{ background:transparent; } }
 </style>
 </head>
 <body class="text-slate-200 font-sans antialiased min-h-screen flex flex-col">
@@ -173,7 +197,7 @@
       </div>
       <div>
         <label class="block text-[11px] font-semibold text-slate-400 uppercase mb-1">Category</label>
-        <input type="text" id="cred-category" placeholder="e.g. Hosting, Banking, Insurance" required class="w-full px-3 py-2 rounded-lg bg-navy-800 border border-ink/10 focus:ring-2 focus:ring-gold-500/50 text-sm">
+        <input type="text" id="cred-category" list="cat-list" autocomplete="off" placeholder="e.g. Hosting, Banking, Insurance" required class="w-full px-3 py-2 rounded-lg bg-navy-800 border border-ink/10 focus:ring-2 focus:ring-gold-500/50 text-sm">
       </div>
       <div class="grid grid-cols-2 gap-3">
         <div>
@@ -223,7 +247,7 @@
       </div>
       <div>
         <label class="block text-[11px] font-semibold text-slate-400 uppercase mb-1">Category</label>
-        <input type="text" id="doc-category" placeholder="e.g. Legal, Insurance, ID" required class="w-full px-3 py-2 rounded-lg bg-navy-800 border border-ink/10 focus:ring-2 focus:ring-gold-500/50 text-sm">
+        <input type="text" id="doc-category" list="cat-list" autocomplete="off" placeholder="e.g. Legal, Insurance, ID" required class="w-full px-3 py-2 rounded-lg bg-navy-800 border border-ink/10 focus:ring-2 focus:ring-gold-500/50 text-sm">
       </div>
       <div>
         <label class="block text-[11px] font-semibold text-slate-400 uppercase mb-1">File (PDF or image)</label>
@@ -412,6 +436,49 @@
   </div>
 </div>
 
+<datalist id="cat-list"></datalist>
+
+<!-- Bulk action bar (visible while Select mode is on) -->
+<div id="bulk-bar" class="bk-bar glass-solid hidden" role="toolbar" aria-label="Bulk actions">
+  <span id="bulk-count" class="text-sm font-semibold text-gold-400 px-1"></span>
+  <button type="button" id="bulk-all-btn" onclick="bulkSelectAll()" class="bk-btn"></button>
+  <button type="button" id="bulk-clear-btn" onclick="bulkClear()" class="bk-btn">Clear</button>
+  <button type="button" id="bulk-edit-btn" onclick="openBulkEdit()" class="bk-btn primary">Edit selected…</button>
+  <button type="button" id="bulk-share-btn" onclick="openShareModal()" class="bk-btn">Share</button>
+  <button type="button" id="bulk-del-btn" onclick="bulkDelete()" class="bk-btn danger">Delete</button>
+</div>
+
+<!-- Bulk edit modal -->
+<div id="bulk-modal" class="fixed inset-0 bg-black/45 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+  <div class="glass-solid rounded-2xl shadow-2xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto fade-in">
+    <h3 class="font-serif font-bold text-lg text-gold-400 mb-1">Edit Selected</h3>
+    <p id="bulk-modal-summary" class="text-sm text-slate-400 mb-4"></p>
+    <form onsubmit="applyBulkEdit(event)" class="space-y-4">
+      <div>
+        <label class="block text-[11px] font-semibold text-slate-400 uppercase mb-1">Set category</label>
+        <input type="text" id="bulk-category" list="cat-list" autocomplete="off" placeholder="Leave blank to keep each entry's category" class="w-full px-3 py-2 rounded-lg bg-navy-800 border border-ink/10 focus:ring-2 focus:ring-gold-500/50 text-sm">
+      </div>
+      <div>
+        <label class="block text-[11px] font-semibold text-slate-400 uppercase mb-1">Move to</label>
+        <select id="bulk-domain" class="w-full px-3 py-2 rounded-lg bg-navy-800 border border-ink/10 focus:ring-2 focus:ring-gold-500/50 text-sm">
+          <option value="">Keep as is</option>
+          <option value="personal">Personal</option>
+          <option value="business">Business</option>
+        </select>
+      </div>
+      <div id="bulk-user-wrap">
+        <label class="block text-[11px] font-semibold text-slate-400 uppercase mb-1">Set username / email (credentials only)</label>
+        <input type="text" id="bulk-username" autocomplete="off" placeholder="Leave blank to keep each entry's username" class="w-full px-3 py-2 rounded-lg bg-navy-800 border border-ink/10 focus:ring-2 focus:ring-gold-500/50 text-sm">
+      </div>
+      <p class="text-[11px] text-slate-500">Only fields you fill in are changed. You can undo right after applying.</p>
+      <div class="flex justify-end gap-3 pt-2">
+        <button type="button" onclick="closeModal('bulk-modal')" class="px-4 py-2 rounded-lg text-sm font-medium border border-ink/10 hover:bg-ink/5">Cancel</button>
+        <button type="submit" class="px-4 py-2 rounded-lg text-sm font-semibold gold-grad text-navy-950 hover:brightness-110">Apply</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div id="toast" class="fixed bottom-5 left-1/2 -translate-x-1/2 glass-solid px-4 py-2.5 rounded-lg text-sm shadow-xl hidden z-50"></div>
 
 <script>
@@ -432,6 +499,9 @@ let activeDomain = 'personal';
 let activeTab = 'credentials';
 let selectMode = false;
 let selectedIds = new Set(); // format: "credential:<id>" / "document:<id>"
+let visibleKeys = [];        // keys of every entry matching the current search/filter (for "select all shown" and shift-click ranges)
+let lastSelKey = null;       // anchor for shift-click range selection
+let groupSelKeys = [];       // per-group key lists in the By Category views
 let credentialsCache = new Map(); // id -> credential record, so secrets never travel through HTML attributes
 let pendingChanges = parseInt(localStorage.getItem('vault_pendingChanges') || '0', 10) || 0;
 // View / sort / filter (remembered between visits)
@@ -451,7 +521,27 @@ let afterQueueCb = null;
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
 function escapeHtml(str){ return String(str).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;"); }
 function formatBytes(bytes){ if(!bytes) return '0 B'; const u=['B','KB','MB','GB']; let i=0; while(bytes>=1024 && i<u.length-1){bytes/=1024;i++;} return bytes.toFixed(1)+' '+u[i]; }
-function showToast(msg){ const t=document.getElementById('toast'); t.innerText=msg; t.classList.remove('hidden'); clearTimeout(window.__toastTimer); window.__toastTimer=setTimeout(()=>t.classList.add('hidden'),3500); }
+let undoAction = null;
+function showToast(msg, undo){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  undoAction = undo || null;
+  if(undo){
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = 'Undo'; b.className = 'text-gold-400';
+    b.style.cssText = 'margin-left:12px;font-weight:600;text-decoration:underline';
+    b.onclick = runUndo;
+    t.appendChild(b);
+  }
+  t.classList.remove('hidden');
+  clearTimeout(window.__toastTimer);
+  window.__toastTimer = setTimeout(() => { t.classList.add('hidden'); undoAction = null; }, undo ? 10000 : 3500);
+}
+async function runUndo(){
+  const fn = undoAction; undoAction = null;
+  document.getElementById('toast').classList.add('hidden');
+  if(fn) await fn();
+}
 function closeModal(id){ const m=document.getElementById(id); m.classList.add('hidden'); m.classList.remove('flex'); }
 function openModal(id){ const m=document.getElementById(id); m.classList.remove('hidden'); m.classList.add('flex'); }
 function blobToBase64(blob){ return new Promise((resolve,reject)=>{ const r=new FileReader(); r.onload=()=>resolve(r.result); r.onerror=reject; r.readAsDataURL(blob); }); }
@@ -464,9 +554,9 @@ function safeHref(u){ try{ const x = new URL(String(u)); return (x.protocol==='h
 async function copyText(text){ try{ await navigator.clipboard.writeText(text); showToast('Copied to clipboard'); }catch(e){ showToast('Could not copy — try downloading instead'); } }
 
 /* ---------- Change tracking / backup reminder ---------- */
-function markChanged(){
+function markChanged(n){
   invalidateDup();
-  pendingChanges++;
+  pendingChanges += (n > 0 ? n : 1);
   localStorage.setItem('vault_pendingChanges', String(pendingChanges));
   updateBackupIndicators();
 }
@@ -579,7 +669,7 @@ async function decryptPackage(payload, passphrase){
 
 /* ---------- Init ---------- */
 /* Keep APP_VERSION in sync with CACHE_VERSION in service-worker.js */
-const APP_VERSION = 'v3';
+const APP_VERSION = 'v4';
 function showVersion(swVersion){
   const el = document.getElementById('app-version'); if(!el) return;
   el.textContent = 'Vault ' + APP_VERSION + (swVersion && swVersion !== APP_VERSION ? ' (update ' + swVersion + ' ready — reopen the app)' : '');
@@ -639,6 +729,8 @@ function setTab(tab){
 function toggleSelectMode(){
   selectMode = !selectMode;
   selectedIds.clear();
+  lastSelKey = null;
+  updateBulkBar();
   const btn = document.getElementById('select-mode-btn');
   btn.innerText = selectMode ? 'Cancel Select' : 'Select';
   btn.className = selectMode
@@ -647,15 +739,69 @@ function toggleSelectMode(){
   render();
 }
 
-function toggleSelected(key){
-  if(selectedIds.has(key)) selectedIds.delete(key); else selectedIds.add(key);
-  render();
+// Click toggles one entry; Shift+click selects/deselects the whole range back to the last clicked entry.
+function toggleSelected(key, ev){
+  const on = !selectedIds.has(key);
+  const set = k => { if(on) selectedIds.add(k); else selectedIds.delete(k); };
+  const a = visibleKeys.indexOf(lastSelKey), b = visibleKeys.indexOf(key);
+  if(ev && ev.shiftKey && a > -1 && b > -1){
+    for(let i = Math.min(a, b); i <= Math.max(a, b); i++) set(visibleKeys[i]);
+  } else set(key);
+  lastSelKey = key;
+  syncSelectionUI();
+}
+function bulkSelectAll(){
+  const all = visibleKeys.length > 0 && visibleKeys.every(k => selectedIds.has(k));
+  visibleKeys.forEach(k => { if(all) selectedIds.delete(k); else selectedIds.add(k); });
+  syncSelectionUI();
+}
+function bulkClear(){ selectedIds.clear(); lastSelKey = null; syncSelectionUI(); }
+function selectGroup(i){
+  const keys = groupSelKeys[i] || [];
+  const all = keys.length > 0 && keys.every(k => selectedIds.has(k));
+  keys.forEach(k => { if(all) selectedIds.delete(k); else selectedIds.add(k); });
+  syncSelectionUI();
+}
+// Updates checkboxes and the action bar in place (no re-render, so scroll position and typing focus are untouched)
+function syncSelectionUI(){
+  document.querySelectorAll('input[data-sel]').forEach(cb => {
+    const on = selectedIds.has(cb.dataset.sel);
+    cb.checked = on;
+    const tr = cb.closest('tr'); if(tr) tr.classList.toggle('sel', on);
+  });
+  const allSel = visibleKeys.length > 0 && visibleKeys.every(k => selectedIds.has(k));
+  document.querySelectorAll('input[data-selall]').forEach(cb => { cb.checked = allSel; });
+  updateBulkBar();
+}
+function selectionCounts(){
+  const c = [...selectedIds].filter(k => k.startsWith('credential:')).length;
+  return { c, d: selectedIds.size - c };
+}
+function countsText(c, d){
+  const parts = [];
+  if(c) parts.push(`${c} credential${c === 1 ? '' : 's'}`);
+  if(d) parts.push(`${d} document${d === 1 ? '' : 's'}`);
+  return parts.join(' and ');
+}
+function updateBulkBar(){
+  const bar = document.getElementById('bulk-bar');
+  const show = selectMode && activeTab !== 'appbackups';
+  bar.classList.toggle('hidden', !show);
+  document.body.classList.toggle('bk-on', show);
+  if(!show) return;
+  const n = selectedIds.size, { c, d } = selectionCounts();
+  document.getElementById('bulk-count').textContent = n ? `${n} selected` + (c && d ? ` (${c} cred, ${d} docs)` : '') : 'None selected';
+  const allSel = visibleKeys.length > 0 && visibleKeys.every(k => selectedIds.has(k));
+  const allBtn = document.getElementById('bulk-all-btn');
+  allBtn.textContent = allSel ? `Deselect all ${visibleKeys.length}` : `Select all ${visibleKeys.length} shown`;
+  allBtn.disabled = visibleKeys.length === 0;
+  ['bulk-clear-btn','bulk-edit-btn','bulk-share-btn','bulk-del-btn'].forEach(id => { document.getElementById(id).disabled = n === 0; });
 }
 
 /* ---------- View modes / sort / filter ---------- */
 const VIEW_DEFS = {
-  credentials: [['detailed','Detailed'],['compact','Compact'],['cards','Cards'],['grouped','By Category']],
-  documents:   [['cards','Cards'],['list','List'],['grouped','By Category']]
+  credentials: [['detailed','Detailed'],['compact','Compact'],['cards','Cards'],['grouped','By Category'],['table','Quick Edit']],
+  documents:   [['cards','Cards'],['list','List'],['grouped','By Category'],['table','Quick Edit']]
 };
 let groupKeyList = [];
 let lastDupIdx = null;
@@ -695,6 +841,7 @@ function updateViewBar(all, shown, cats){
   const sorted = [...cats.entries()].sort((a, b) => a[1].localeCompare(b[1], undefined, {sensitivity:'base'}));
   document.getElementById('cat-filter').innerHTML = `<option value="">All categories (${sorted.length})</option>` +
     sorted.map(([k, l]) => `<option value="${escapeHtml(k)}" ${catFilter === k ? 'selected' : ''}>${escapeHtml(l)}</option>`).join('');
+  document.getElementById('cat-list').innerHTML = sorted.filter(([k]) => k !== 'uncategorized').map(([, l]) => `<option value="${escapeHtml(l)}"></option>`).join('');
   document.getElementById('sort-select').value = sortMode;
   const noun = activeTab === 'credentials' ? 'credential' : 'document';
   document.getElementById('result-count').innerText = shown === all.length
@@ -729,11 +876,12 @@ async function render(){
   } else {
     await renderAppBackups();
   }
+  if(token === renderToken) syncSelectionUI();
 }
 
 /* ---------- Shared row pieces ---------- */
 function selBox(key, extra){
-  return selectMode ? `<input type="checkbox" onchange="toggleSelected('${key}')" ${selectedIds.has(key) ? 'checked' : ''} class="w-4 h-4 accent-gold-500 flex-shrink-0 ${extra || ''}">` : '';
+  return selectMode ? `<input type="checkbox" data-sel="${key}" onclick="toggleSelected('${key}', event)" ${selectedIds.has(key) ? 'checked' : ''} class="w-4 h-4 accent-gold-500 flex-shrink-0 ${extra || ''}">` : '';
 }
 function catChip(x){ return `<span class="bg-navy-700 text-slate-300 px-2 py-0.5 rounded text-[11px] font-medium">${escapeHtml(catLabel(x))}</span>`; }
 function dupBadge(kind, id){
@@ -760,6 +908,7 @@ function credPassBlock(c){
 /* ---------- Credential views ---------- */
 function renderCredentials(items, total, search){
   const view = document.getElementById('credentials-view');
+  visibleKeys = items.map(c => `credential:${c.id}`);
   if(items.length === 0){
     view.innerHTML = `<div class="glass rounded-xl p-10 text-center text-slate-500 text-sm">${total ? 'No credentials match your search or filter.' : `No credentials yet in ${activeDomain}. Click "+ Add Credential" to get started.`}</div>`;
     return;
@@ -768,6 +917,7 @@ function renderCredentials(items, total, search){
   items.forEach(c => credentialsCache.set(c.id, c));
   const mode = viewMode.credentials;
   if(mode === 'grouped') view.innerHTML = groupedHtml(items, 'credentials', credRowCompact, search);
+  else if(mode === 'table') view.innerHTML = credTable(items);
   else if(mode === 'cards') view.innerHTML = `<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">${items.map(credCard).join('')}</div>`;
   else if(mode === 'compact') view.innerHTML = `<div class="space-y-1.5">${items.map(credRowCompact).join('')}</div>`;
   else view.innerHTML = `<div class="space-y-3">${items.map(credRowDetailed).join('')}</div>`;
@@ -858,16 +1008,21 @@ function groupedHtml(items, kind, rowFn, search){
   });
   const sorted = [...groups.entries()].sort((a, b) => a[1].label.localeCompare(b[1].label, undefined, {sensitivity:'base'}));
   groupKeyList = sorted.map(([k]) => `${kind}:${activeDomain}:${k}`);
+  const selPrefix = kind === 'credentials' ? 'credential' : 'document';
+  groupSelKeys = sorted.map(([, g]) => g.items.map(it => `${selPrefix}:${it.id}`));
   const forceOpen = !!search; // never hide search matches inside a collapsed group
   const controls = `<div class="flex justify-end gap-4 mb-2 text-xs"><button onclick="setAllGroups(false)" class="text-slate-400 hover:text-gold-400">Expand all</button><button onclick="setAllGroups(true)" class="text-slate-400 hover:text-gold-400">Collapse all</button></div>`;
   return controls + sorted.map(([k, g], i) => {
     const open = forceOpen || !collapsedGroups.has(groupKeyList[i]);
     return `
     <section class="mb-3">
-      <button onclick="toggleGroup(${i})" class="w-full flex items-center justify-between gap-2 px-1 py-1.5 mb-1.5 text-left">
-        <span class="flex items-center gap-2"><span class="text-gold-400 text-xs w-3">${open ? '▾' : '▸'}</span><span class="font-serif font-semibold text-gold-400">${escapeHtml(g.label)}</span></span>
-        <span class="text-[11px] text-slate-500">${g.items.length}</span>
-      </button>
+      <div class="flex items-center gap-3 mb-1.5">
+        <button onclick="toggleGroup(${i})" class="flex-1 flex items-center justify-between gap-2 px-1 py-1.5 text-left">
+          <span class="flex items-center gap-2"><span class="text-gold-400 text-xs w-3">${open ? '▾' : '▸'}</span><span class="font-serif font-semibold text-gold-400">${escapeHtml(g.label)}</span></span>
+          <span class="text-[11px] text-slate-500">${g.items.length}</span>
+        </button>
+        ${selectMode ? `<button onclick="selectGroup(${i})" class="text-[11px] text-teal-400 hover:underline flex-shrink-0">Select group</button>` : ''}
+      </div>
       ${open ? `<div class="space-y-1.5">${g.items.map(rowFn).join('')}</div>` : ''}
     </section>`;
   }).join('');
@@ -876,12 +1031,14 @@ function groupedHtml(items, kind, rowFn, search){
 /* ---------- Document views ---------- */
 function renderDocuments(items, total, search){
   const view = document.getElementById('documents-view');
+  visibleKeys = items.map(d => `document:${d.id}`);
   if(items.length === 0){
     view.innerHTML = `<div class="glass rounded-xl p-10 text-center text-slate-500 text-sm">${total ? 'No documents match your search or filter.' : `No documents yet in ${activeDomain}. Click "+ Add Document" to attach one.`}</div>`;
     return;
   }
   const mode = viewMode.documents;
   if(mode === 'grouped') view.innerHTML = groupedHtml(items, 'documents', docRowList, search);
+  else if(mode === 'table') view.innerHTML = docTable(items);
   else if(mode === 'list') view.innerHTML = `<div class="space-y-1.5">${items.map(docRowList).join('')}</div>`;
   else view.innerHTML = `<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">${items.map(docCard).join('')}</div>`;
 }
@@ -931,6 +1088,175 @@ function docRowList(d){
       </div>
     </div>
   </div>`;
+}
+
+/* ---------- Quick Edit tables (edit in place; every change autosaves) ---------- */
+function qInput(kind, id, field, value, o){
+  o = o || {};
+  const v = value == null ? '' : String(value);
+  const attrs = `class="qi${o.mono ? ' mono' : ''}" data-k="${kind}" data-id="${escapeHtml(id)}" data-f="${field}" data-orig="${escapeHtml(o.pw ? '' : v)}" onchange="quickSave(this)" onkeydown="quickKey(event,this)" autocomplete="off" spellcheck="false" aria-label="${escapeHtml(o.label || field)}" placeholder="${escapeHtml(o.ph || '')}"`;
+  if(o.area) return `<textarea ${attrs} rows="1">\n${escapeHtml(v)}</textarea>`;
+  // Passwords are never written into the page: the cell stays empty (bullets as placeholder) until you click into it
+  if(o.pw) return `<input type="text" ${attrs} onfocus="qpFocus(this)" onblur="qpBlur(this)">`;
+  return `<input type="text" ${attrs} value="${escapeHtml(v)}"${o.list ? ' list="cat-list"' : ''}>`;
+}
+function qHead(cols){
+  return `<tr>${selectMode ? `<th style="width:30px"><input type="checkbox" data-selall onclick="bulkSelectAll()" class="w-4 h-4 accent-gold-500" aria-label="Select all shown"></th>` : ''}${cols.map(c => `<th>${c}</th>`).join('')}</tr>`;
+}
+function qWrap(head, rows){
+  return `<div class="glass rounded-xl p-2"><div class="qt-wrap"><table class="qt"><thead>${head}</thead><tbody>${rows}</tbody></table></div><p class="text-[11px] text-slate-500 px-2 pt-2">Click any cell to edit. Changes save automatically · Enter moves to the next row · Esc cancels · scroll sideways on small screens.</p></div>`;
+}
+function credTable(items){
+  const rows = items.map(c => {
+    const key = `credential:${c.id}`, vendor = c.type === 'vendor';
+    return `<tr class="${selectedIds.has(key) ? 'sel' : ''}">
+      ${selectMode ? `<td class="qa">${selBox(key)}</td>` : ''}
+      <td>${qInput('credential', c.id, 'name', c.name, {label:'Name'})}</td>
+      <td>${qInput('credential', c.id, 'category', c.category, {label:'Category', list:true, ph:'Uncategorized'})}</td>
+      <td>${qInput('credential', c.id, 'username', c.username, {label:'Username', mono:true})}</td>
+      <td>${qInput('credential', c.id, 'password', '', {label:'Password', mono:true, pw:true, ph: c.password ? '••••••••••' : '(none)'})}</td>
+      <td>${qInput('credential', c.id, vendor ? 'url' : 'billing', vendor ? c.url : c.billing, {label: vendor ? 'Login URL' : 'Billing', ph: vendor ? 'https://…' : 'Monthly - $49/mo'})}</td>
+      <td>${qInput('credential', c.id, 'notes', c.notes, {label:'Notes', area:true})}</td>
+      <td class="qa"><button onclick='editCredential("${c.id}")' class="text-slate-400 hover:text-gold-400 font-medium">Full edit</button> <button onclick="deleteCredential('${c.id}')" class="text-slate-400 hover:text-rose-400 font-medium" style="margin-left:8px">Del</button></td>
+    </tr>`;
+  }).join('');
+  return qWrap(qHead(['Name','Category','Username','Password','URL / Billing','Notes','']), rows);
+}
+function docTable(items){
+  const rows = items.map(d => {
+    const key = `document:${d.id}`;
+    return `<tr class="${selectedIds.has(key) ? 'sel' : ''}">
+      ${selectMode ? `<td class="qa">${selBox(key)}</td>` : ''}
+      <td>${qInput('document', d.id, 'name', d.name, {label:'Name'})}</td>
+      <td>${qInput('document', d.id, 'category', d.category, {label:'Category', list:true, ph:'Uncategorized'})}</td>
+      <td class="qa text-slate-500">${escapeHtml(d.fileName || '')} · ${formatBytes(d.fileSize)}</td>
+      <td>${qInput('document', d.id, 'notes', d.notes, {label:'Notes', area:true})}</td>
+      <td class="qa"><button onclick="viewDocument('${d.id}')" class="text-teal-400 hover:underline font-medium">View</button> <button onclick="deleteDocument('${d.id}')" class="text-slate-400 hover:text-rose-400 font-medium" style="margin-left:8px">Del</button></td>
+    </tr>`;
+  }).join('');
+  return qWrap(qHead(['Name','Category','File','Notes','']), rows);
+}
+function qpFocus(el){
+  const c = credentialsCache.get(el.dataset.id);
+  if(!c) return;
+  el.value = c.password || '';
+  el.dataset.orig = el.value;
+}
+function qpBlur(el){
+  const c = credentialsCache.get(el.dataset.id);
+  el.value = '';
+  el.placeholder = c && c.password ? '••••••••••' : '(none)';
+}
+async function quickSave(el){
+  const kind = el.dataset.k, id = el.dataset.id, f = el.dataset.f;
+  const isPw = f === 'password';
+  const v = isPw ? el.value : el.value.trim();
+  const orig = el.dataset.orig;
+  if(v === orig){ if(!isPw) el.value = v; return; }
+  if(f === 'name' && !v){ el.value = orig; showToast("Name can't be empty"); return; }
+  el.dataset.orig = v;
+  if(!isPw) el.value = v;
+  const now = Date.now();
+  if(kind === 'credential'){ const c = credentialsCache.get(id); if(c){ c[f] = v; c.updatedAt = now; } }
+  try{
+    const n = await (kind === 'credential' ? db.credentials : db.documents).update(id, { [f]: v, updatedAt: now });
+    if(!n){ showToast('That entry no longer exists'); return; }
+    markChanged();
+    el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+  }catch(err){
+    el.dataset.orig = orig;
+    showToast('Could not save that change. Try again.');
+  }
+}
+function quickKey(ev, el){
+  if(ev.isComposing) return;
+  if(ev.key === 'Escape'){ el.value = el.dataset.orig; el.blur(); return; }
+  if(ev.key === 'Enter' && el.tagName !== 'TEXTAREA'){
+    ev.preventDefault();
+    const tr = el.closest('tr');
+    const next = ev.shiftKey ? tr.previousElementSibling : tr.nextElementSibling;
+    const target = next && next.querySelector(`[data-f="${el.dataset.f}"]`);
+    if(target){ target.focus(); if(target.select) target.select(); } else el.blur();
+  }
+}
+
+/* ---------- Bulk edit / delete (act on everything in selectedIds) ---------- */
+function selectedIdsOf(prefix){ return [...selectedIds].filter(k => k.startsWith(prefix + ':')).map(k => k.split(':')[1]); }
+function hiddenSelectedCount(){ const vis = new Set(visibleKeys); return [...selectedIds].filter(k => !vis.has(k)).length; }
+function hiddenNote(){ const h = hiddenSelectedCount(); return h ? ` ${h} of them ${h === 1 ? 'is' : 'are'} not shown right now (other tab, Personal/Business, or filtered out).` : ''; }
+
+function openBulkEdit(){
+  if(!selectedIds.size){ showToast('Nothing selected'); return; }
+  const { c, d } = selectionCounts();
+  document.getElementById('bulk-modal-summary').textContent = `Applies to ${countsText(c, d)}.${hiddenNote()}`;
+  document.getElementById('bulk-category').value = '';
+  document.getElementById('bulk-domain').value = '';
+  document.getElementById('bulk-username').value = '';
+  document.getElementById('bulk-user-wrap').classList.toggle('hidden', c === 0);
+  openModal('bulk-modal');
+}
+
+async function applyBulkEdit(e){
+  e.preventDefault();
+  const cat = document.getElementById('bulk-category').value.trim();
+  const dom = document.getElementById('bulk-domain').value;
+  const user = document.getElementById('bulk-username').value.trim();
+  const credIds = selectedIdsOf('credential'), docIds = selectedIdsOf('document');
+  const useUser = !!user && credIds.length > 0;
+  if(!cat && !dom && !useUser){ showToast('Fill in at least one field to change'); return; }
+  const now = Date.now();
+  const undo = []; // [table, id, previous values] so the whole change can be reverted
+  await db.transaction('rw', db.credentials, db.documents, async () => {
+    for(const [table, ids, isCred] of [[db.credentials, credIds, true], [db.documents, docIds, false]]){
+      const recs = await table.bulkGet(ids);
+      for(const r of recs){
+        if(!r) continue;
+        const ch = { updatedAt: now };
+        if(cat) ch.category = cat;
+        if(dom) ch.domain = dom;
+        if(isCred && useUser) ch.username = user;
+        const prev = {}; Object.keys(ch).forEach(k => { prev[k] = r[k]; });
+        await table.update(r.id, ch);
+        undo.push([table, r.id, prev]);
+      }
+    }
+  });
+  const count = undo.length;
+  closeModal('bulk-modal');
+  if(dom){ selectedIds.clear(); lastSelKey = null; } // moved entries leave this view, so don't leave them selected
+  markChanged(count);
+  await render();
+  showToast(`Updated ${count} ${count === 1 ? 'entry' : 'entries'}`, async () => {
+    await db.transaction('rw', db.credentials, db.documents, async () => { for(const [t, id, prev] of undo) await t.update(id, prev); });
+    markChanged(count);
+    await render();
+    showToast('Change undone');
+  });
+}
+
+function bulkDelete(){
+  if(!selectedIds.size){ showToast('Nothing selected'); return; }
+  const { c, d } = selectionCounts();
+  const msg = `This permanently deletes ${countsText(c, d)}${d ? ', including their attached files' : ''}.${hiddenNote()} You'll get a few seconds to undo, but a backup first is safer.`;
+  showConfirm('Delete Selected', msg, `Delete ${selectedIds.size}`, true, async () => {
+    const creds = (await db.credentials.bulkGet(selectedIdsOf('credential'))).filter(Boolean);
+    const docs = (await db.documents.bulkGet(selectedIdsOf('document'))).filter(Boolean);
+    await db.transaction('rw', db.credentials, db.documents, async () => {
+      await db.credentials.bulkDelete(creds.map(r => r.id));
+      await db.documents.bulkDelete(docs.map(r => r.id));
+    });
+    const count = creds.length + docs.length;
+    selectedIds.clear(); lastSelKey = null;
+    markChanged(count);
+    await render();
+    showToast(`Deleted ${count} ${count === 1 ? 'entry' : 'entries'}`, async () => {
+      await db.credentials.bulkPut(creds);
+      await db.documents.bulkPut(docs);
+      markChanged(count);
+      await render();
+      showToast('Restored');
+    });
+  });
 }
 
 function togglePassword(id){
