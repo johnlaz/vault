@@ -414,7 +414,8 @@
   <div class="glass-solid rounded-2xl shadow-2xl max-w-sm w-full p-6 fade-in">
     <h3 class="font-serif font-bold text-lg text-gold-400 mb-2">Protect This Export</h3>
     <p class="text-sm text-slate-400 mb-4">Set a passphrase to encrypt this file. Without it, anyone who opens the file sees only scrambled data — nothing readable unless it's decrypted back into the app. There's no recovery if you forget it, so keep it somewhere separate from the file itself.</p>
-    <input type="password" id="export-passphrase-input" placeholder="Passphrase" class="w-full px-3 py-2 rounded-lg bg-navy-800 border border-ink/10 text-sm mb-4">
+    <input type="password" id="export-passphrase-input" placeholder="Passphrase" class="w-full px-3 py-2 rounded-lg bg-navy-800 border border-ink/10 text-sm mb-3">
+    <p id="export-size-note" class="text-[11px] text-slate-500 mb-4"></p>
     <div class="flex flex-col gap-2">
       <button onclick="confirmExportEncrypted()" class="px-4 py-2.5 rounded-lg text-sm font-semibold gold-grad text-navy-950">Encrypt &amp; Export</button>
       <button onclick="confirmExportPlain()" class="px-4 py-2.5 rounded-lg text-sm font-medium bg-navy-700 hover:bg-navy-600 border border-ink/10">Export Without Encryption</button>
@@ -522,7 +523,7 @@ function uid(){ return Date.now().toString(36) + Math.random().toString(36).slic
 function escapeHtml(str){ return String(str).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;"); }
 function formatBytes(bytes){ if(!bytes) return '0 B'; const u=['B','KB','MB','GB']; let i=0; while(bytes>=1024 && i<u.length-1){bytes/=1024;i++;} return bytes.toFixed(1)+' '+u[i]; }
 let undoAction = null;
-function showToast(msg, undo){
+function showToast(msg, undo, ms){
   const t = document.getElementById('toast');
   t.textContent = msg;
   undoAction = undo || null;
@@ -535,7 +536,7 @@ function showToast(msg, undo){
   }
   t.classList.remove('hidden');
   clearTimeout(window.__toastTimer);
-  window.__toastTimer = setTimeout(() => { t.classList.add('hidden'); undoAction = null; }, undo ? 10000 : 3500);
+  window.__toastTimer = setTimeout(() => { t.classList.add('hidden'); undoAction = null; }, ms || (undo ? 10000 : 3500));
 }
 async function runUndo(){
   const fn = undoAction; undoAction = null;
@@ -547,7 +548,7 @@ function openModal(id){ const m=document.getElementById(id); m.classList.remove(
 function blobToBase64(blob){ return new Promise((resolve,reject)=>{ const r=new FileReader(); r.onload=()=>resolve(r.result); r.onerror=reject; r.readAsDataURL(blob); }); }
 function base64ToBlob(dataUrl){ const [meta, data] = dataUrl.split(','); const mimeMatch = meta.match(/:(.*?);/); const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream'; const bin = atob(data); const arr = new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i); return new Blob([arr], {type: mime}); }
 function downloadJSON(obj, filename){ const blob = new Blob([JSON.stringify(obj, null, 2)], {type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; document.body.appendChild(a); a.click(); a.remove(); }
-function downloadBlob(blob, filename){ const a = document.createElement('a'); const url = URL.createObjectURL(blob); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url), 4000); }
+function downloadBlob(blob, filename){ const a = document.createElement('a'); const url = URL.createObjectURL(blob); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url), 30000); }
 function normKey(s){ return String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]/g,''); }
 // Only http(s) links are made clickable — imported/shared data must never be able to inject javascript: URLs
 function safeHref(u){ try{ const x = new URL(String(u)); return (x.protocol==='http:' || x.protocol==='https:') ? x.href : ''; }catch(e){ return ''; } }
@@ -659,6 +660,17 @@ async function encryptPackage(obj, passphrase){
   };
 }
 async function decryptPackage(payload, passphrase){
+  if(payload.version === 2){
+    // Chunked format written by streaming exports: each chunk is its own AES-GCM message, bound to its position and a last-chunk flag
+    const key2 = await deriveKey(passphrase, base64ToUint8(payload.salt), payload.iterations || 250000);
+    const chunks = payload.chunks;
+    if(!Array.isArray(chunks) || !chunks.length || (payload.count != null && payload.count !== chunks.length)) throw new Error('Encrypted file is incomplete');
+    const te = new TextEncoder(), bufs = [];
+    for(let i = 0; i < chunks.length; i++){
+      bufs.push(await crypto.subtle.decrypt({ name:'AES-GCM', iv: base64ToUint8(chunks[i].iv), additionalData: te.encode(`vault2:${i}:${i === chunks.length - 1 ? 1 : 0}`) }, key2, base64ToUint8(chunks[i].ct)));
+    }
+    return JSON.parse(await new Blob(bufs).text());
+  }
   const salt = base64ToUint8(payload.salt);
   const iv = base64ToUint8(payload.iv);
   const key = await deriveKey(passphrase, salt, payload.iterations || 250000);
@@ -669,7 +681,7 @@ async function decryptPackage(payload, passphrase){
 
 /* ---------- Init ---------- */
 /* Keep APP_VERSION in sync with CACHE_VERSION in service-worker.js */
-const APP_VERSION = 'v4';
+const APP_VERSION = 'v5';
 function showVersion(swVersion){
   const el = document.getElementById('app-version'); if(!el) return;
   el.textContent = 'Vault ' + APP_VERSION + (swVersion && swVersion !== APP_VERSION ? ' (update ' + swVersion + ' ready — reopen the app)' : '');
@@ -1448,13 +1460,154 @@ async function buildBackupPackage(){
   return { packageType: 'vault-backup', createdAt: new Date().toISOString(), credentials: creds, documents: docsWithData, appBackups };
 }
 
+/* ---------- Streaming export ----------
+   Big vaults used to fail silently: every attachment was read into one base64 string, then one JSON string,
+   then (if encrypted) copies of both. Now the file is written piece by piece: each attachment is encoded a slice
+   at a time, and finished pieces are handed to the browser's blob store so memory stays near one slice, not the
+   whole vault. Encrypted exports encrypt as they go, in independent chunks. The plain file format is unchanged. */
+const B64_SLICE = 3 * 256 * 1024;   // multiple of 3 bytes so slices join into valid base64
+const ENC_CHUNK = 4 * 1024 * 1024;  // roughly how much plaintext goes into each encrypted chunk
+const exportStats = { bytes: 0 };
+
+// A sink is where finished pieces go: either an open file on disk (File System Access API, nothing accumulates in memory)
+// or a list of Blobs that become one download at the end.
+function makeSink(writable){
+  if(writable) return { async write(x){ await writable.write(x); }, async close(){ await writable.close(); return null; }, async abort(){ try{ await writable.abort(); }catch(e){} } };
+  const parts = [];
+  return { async write(x){ parts.push(x instanceof Blob ? x : new Blob([x])); }, async close(){ return new Blob(parts, { type: 'application/json' }); }, async abort(){} };
+}
+
+// Plain writer: collects strings and hands them to the sink in ~8 MB pieces
+function makePlainWriter(sink){
+  let pending = [], len = 0;
+  const flush = async () => { if(pending.length){ const t = pending.join(''); pending = []; len = 0; await sink.write(t); } };
+  return {
+    async str(x){ pending.push(x); len += x.length; if(len > 8 * 1024 * 1024) await flush(); },
+    async finish(){ await flush(); return sink.close(); }
+  };
+}
+
+// Encrypting writer: buffers plaintext, and every ~4 MB seals a chunk with AES-GCM. Each chunk is bound to its
+// position and a "last chunk" flag, so reordering or truncating chunks makes decryption fail.
+async function makeEncWriter(sink, passphrase, meta){
+  const iterations = 250000;
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const key = await deriveKey(passphrase, salt, iterations);
+  const te = new TextEncoder();
+  await sink.write(`{"vaultEncrypted":true,"version":2,"packageType":${JSON.stringify(meta.packageType)},"createdAt":${JSON.stringify(meta.createdAt)},"salt":"${uint8ToBase64(salt)}","iterations":${iterations},"chunks":[`);
+  let buf = [], bufLen = 0, held = null, idx = 0;
+  const concat = list => { const out = new Uint8Array(list.reduce((n, u) => n + u.length, 0)); let o = 0; list.forEach(u => { out.set(u, o); o += u.length; }); return out; };
+  async function seal(plain, isLast){
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ct = new Uint8Array(await crypto.subtle.encrypt({ name:'AES-GCM', iv, additionalData: te.encode(`vault2:${idx}:${isLast ? 1 : 0}`) }, key, plain));
+    await sink.write((idx ? ',' : '') + `{"iv":"${uint8ToBase64(iv)}","ct":"${uint8ToBase64(ct)}"}`);
+    idx++;
+  }
+  async function put(chunk){ if(held) await seal(held, false); held = chunk; } // hold one chunk back so the last one can be flagged
+  return {
+    async str(x){ const u = te.encode(x); buf.push(u); bufLen += u.length; if(bufLen >= ENC_CHUNK){ const c = concat(buf); buf = []; bufLen = 0; await put(c); } },
+    async finish(){
+      if(bufLen){ await put(concat(buf)); buf = []; bufLen = 0; }
+      await seal(held || new Uint8Array(0), true);
+      await sink.write(`],"count":${idx}}`);
+      return sink.close();
+    }
+  };
+}
+
+// Reading a stored file can fail transiently under memory pressure, so retry a couple of times before giving up
+async function readSlice(blob, o){
+  for(let attempt = 0; ; attempt++){
+    try{ return new Uint8Array(await blob.slice(o, o + B64_SLICE).arrayBuffer()); }
+    catch(err){ if(attempt >= 2) throw err; await new Promise(r => setTimeout(r, 250 * (attempt + 1))); }
+  }
+}
+async function writeFileData(w, blob){
+  const mime = String((blob && blob.type) || 'application/octet-stream').replace(/[^\w.+\/-]/g, '') || 'application/octet-stream';
+  await w.str(`"data:${mime};base64,`);
+  if(blob){
+    for(let o = 0; o < blob.size; o += B64_SLICE){
+      await w.str(uint8ToBase64(await readSlice(blob, o)));
+    }
+    exportStats.bytes += blob.size;
+  }
+  await w.str('"');
+}
+async function writeEntry(w, meta, fileBlob){
+  await w.str(JSON.stringify(meta).slice(0, -1) + ',"fileData":');
+  await writeFileData(w, fileBlob);
+  await w.str('}');
+}
+
+async function writeBackup(w, createdAt, progress){
+  const creds = await db.credentials.toArray();
+  const docIds = await db.documents.toCollection().primaryKeys();
+  const appIds = await db.appBackups.toCollection().primaryKeys();
+  const total = docIds.length + appIds.length; let done = 0, nd = 0, na = 0;
+  await w.str(`{"packageType":"vault-backup","createdAt":${JSON.stringify(createdAt)},"credentials":${JSON.stringify(creds)},"documents":[`);
+  for(const id of docIds){
+    const d = await db.documents.get(id); if(!d) continue;
+    if(nd++) await w.str(',');
+    await writeEntry(w, { id: d.id, domain: d.domain, name: d.name, category: d.category, notes: d.notes, fileName: d.fileName, fileType: d.fileType, fileSize: d.fileSize, createdAt: d.createdAt }, d.fileBlob);
+    if(progress) progress(++done, total);
+  }
+  await w.str('],"appBackups":[');
+  for(const id of appIds){
+    const a = await db.appBackups.get(id); if(!a) continue;
+    if(na++) await w.str(',');
+    await writeEntry(w, { id: a.id, appName: a.appName, fileName: a.fileName, fileSize: a.fileSize, backupDate: a.backupDate, dateSource: a.dateSource, addedAt: a.addedAt, flag: a.flag || null }, a.fileBlob);
+    if(progress) progress(++done, total);
+  }
+  await w.str(']}');
+  return `${creds.length} credentials, ${nd} documents, ${na} app backups`;
+}
+
+async function writeShare(w, createdAt, progress){
+  const creds = (await db.credentials.bulkGet(selectedIdsOf('credential'))).filter(Boolean)
+    .map(c => ({ domain:c.domain, type:c.type, name:c.name, category:c.category, username:c.username, password:c.password, url:c.url, billing:c.billing, notes:c.notes }));
+  const docRecs = (await db.documents.bulkGet(selectedIdsOf('document'))).filter(Boolean);
+  await w.str(`{"packageType":"vault-share","createdAt":${JSON.stringify(createdAt)},"credentials":${JSON.stringify(creds)},"documents":[`);
+  let done = 0;
+  for(const d of docRecs){
+    if(done) await w.str(',');
+    await writeEntry(w, { name: d.name, category: d.category, notes: d.notes, fileName: d.fileName, fileType: d.fileType, fileSize: d.fileSize }, d.fileBlob);
+    if(progress) progress(++done, docRecs.length);
+  }
+  await w.str(']}');
+  return `${creds.length} credentials, ${docRecs.length} documents`;
+}
+
+async function buildExport(kind, passphrase, progress, writable){
+  exportStats.bytes = 0;
+  const createdAt = new Date().toISOString();
+  const packageType = kind === 'backup' ? 'vault-backup' : 'vault-share';
+  const sink = makeSink(writable);
+  try{
+    const w = passphrase ? await makeEncWriter(sink, passphrase, { packageType, createdAt }) : makePlainWriter(sink);
+    const counts = kind === 'backup' ? await writeBackup(w, createdAt, progress) : await writeShare(w, createdAt, progress);
+    return { blob: await w.finish(), counts };
+  }catch(err){ await sink.abort(); throw err; }
+}
+
 /* ---------- Export flow (with optional passphrase encryption) ---------- */
 let pendingExport = null; // { type: 'backup' } | { type: 'share', action: 'download'|'copy' }
 
 function exportBackup(){
   pendingExport = { type: 'backup' };
   document.getElementById('export-passphrase-input').value = '';
+  document.getElementById('export-size-note').textContent = '';
   openModal('export-passphrase-modal');
+  describeVaultSize().then(t => { const n = document.getElementById('export-size-note'); if(n && pendingExport && pendingExport.type === 'backup') n.textContent = t; }).catch(() => {});
+}
+// Where the space goes, so a very large backup isn't a surprise
+async function describeVaultSize(){
+  let docB = 0, docN = 0, appB = 0, appN = 0;
+  await db.documents.each(d => { docN++; docB += (d.fileBlob && d.fileBlob.size) || d.fileSize || 0; });
+  await db.appBackups.each(a => { appN++; appB += (a.fileBlob && a.fileBlob.size) || a.fileSize || 0; });
+  const mb = b => (b / 1048576).toFixed(b >= 10485760 ? 0 : 1) + ' MB';
+  let t = `Backup size: about ${mb((docB + appB) * 1.34)} (documents ${docN}: ${mb(docB)}, app backups ${appN}: ${mb(appB)}).`;
+  if(docB + appB > 300 * 1048576) t += ' Files this big can be slow or fail to restore on phones; consider removing large attachments you can keep elsewhere.';
+  return t;
 }
 
 function downloadSharePackage(){
@@ -1485,21 +1638,40 @@ async function confirmExportPlain(){
 
 async function runExport(passphrase){
   if(!pendingExport) return;
+  const job = pendingExport; pendingExport = null; // also blocks a double-click from starting two exports
   closeModal('export-passphrase-modal');
-  const pkg = pendingExport.type === 'backup' ? await buildBackupPackage() : await buildSharePackage();
-  const payload = passphrase ? await encryptPackage(pkg, passphrase) : pkg;
-  if(pendingExport.type === 'backup'){
-    downloadJSON(payload, `vault_backup_${new Date().toISOString().slice(0,10)}.json`);
-    clearChangeCounter();
-    const n = `${(pkg.credentials||[]).length} credentials, ${(pkg.documents||[]).length} documents, ${(pkg.appBackups||[]).length} app backups`;
-    showToast((passphrase ? 'Encrypted backup downloaded: ' : 'Backup downloaded: ') + n);
-  } else if(pendingExport.action === 'download'){
-    downloadJSON(payload, `vault_share_${new Date().toISOString().slice(0,10)}.json`);
-    showToast(passphrase ? 'Encrypted share file downloaded' : 'Share file downloaded');
-  } else {
-    await copyText(JSON.stringify(payload));
+  const day = new Date().toISOString().slice(0,10);
+  const fileName = `vault_${job.type === 'backup' ? 'backup' : 'share'}_${day}.json`;
+  try{
+    if(job.type === 'share' && job.action === 'copy'){
+      const pkg = await buildSharePackage();
+      await copyText(JSON.stringify(passphrase ? await encryptPackage(pkg, passphrase) : pkg));
+      return;
+    }
+    // Where the browser supports it, write straight to a file on disk: memory stays flat no matter how big the vault is.
+    // (Must be requested first, while the click that started the export still counts as a user action.)
+    let handle = null, writable = null;
+    if(typeof window.showSaveFilePicker === 'function'){
+      try{
+        handle = await window.showSaveFilePicker({ suggestedName: fileName, types: [{ description: 'Vault export', accept: { 'application/json': ['.json'] } }] });
+        writable = await handle.createWritable();
+      }catch(err){
+        if(err && err.name === 'AbortError'){ showToast('Export cancelled'); return; }
+        handle = null; writable = null; // picker unavailable here; fall back to a normal download
+      }
+    }
+    showToast('Preparing export…', null, 60000);
+    const built = await buildExport(job.type, passphrase, (d, t) => showToast(`${passphrase ? 'Encrypting' : 'Preparing'} export… file ${d}/${t}`, null, 60000), writable);
+    let bytes;
+    if(handle){ bytes = (await handle.getFile()).size; }
+    else { downloadBlob(built.blob, fileName); bytes = built.blob.size; }
+    if(job.type === 'backup') clearChangeCounter();
+    showToast(`${passphrase ? 'Encrypted ' : ''}${job.type === 'backup' ? 'backup' : 'share file'} ${handle ? 'saved' : 'downloaded'} (${(bytes / 1048576).toFixed(1)} MB): ${built.counts}`, null, 6000);
+  }catch(err){
+    console.error('Export failed', err);
+    const why = (err && (err.message || err.name)) || 'unknown error';
+    showToast(`Export failed (${why}). Attachments: ${(exportStats.bytes / 1048576).toFixed(0)} MB. Nothing was saved; your data is untouched. Very large vaults export best from desktop Chrome or Edge, which can save straight to disk.`, null, 14000);
   }
-  pendingExport = null;
 }
 
 /* ---------- Import ---------- */
@@ -1519,7 +1691,7 @@ function handleImportFile(e){
   const reader = new FileReader();
   reader.onload = (ev) => {
     try{ routeImportData(JSON.parse(ev.target.result)); }
-    catch(err){ showToast('Could not parse that file'); }
+    catch(err){ showToast('Could not read that file. It may not be a Vault export, or it may be too large for this device\'s memory.', null, 7000); }
   };
   reader.readAsText(file);
 }

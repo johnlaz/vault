@@ -3,7 +3,7 @@
    - Navigations: network-first, falling back to the cached app shell (works offline).
    - Same-origin static assets: cache-first.
    - Everything the app needs to start is precached, so a cold offline launch works. */
-const CACHE_VERSION = 'v4';
+const CACHE_VERSION = 'v5';
 const CACHE_NAME = 'vault-' + CACHE_VERSION;
 const CORE_ASSETS = [
   './',
