@@ -83,6 +83,6 @@ Settings screen shows the running version.
 
 ## Changelog
 
-- **v4** — Bulk editing. Select mode now has an action bar: select all shown, shift-click ranges, select a whole category, then change category, move between Personal/Business, set a username, or delete, with Undo. New **Quick Edit** view (credentials and documents): edit any cell in place, changes autosave. Category fields autocomplete from your existing categories.
+- **v4** — Bulk editing. Select mode now has an action bar: select all shown, shift-click ranges, select a whole category, then change category, move between Personal/Business, set a username, or delete, with Undo. New **Quick Edit** view (credentials and documents): edit any cell in place, changes autosave. Category fields autocomplete from your existing categories. Added the missing `icon-192.png` and `apple-touch-icon.png` so the service worker installs and offline launch works.
 - **v3** — Fully offline launch: Tailwind, Dexie and fonts are now self-hosted and precached. Service worker rewritten (network-first pages, cache-first assets). Version stamp and storage-protection status in Settings. Manifest `id`; single maskable 512 icon. Removed stray files.
 - **v2** — Previous release (CDN-loaded styles and libraries).
